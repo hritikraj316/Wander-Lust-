@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
@@ -14,15 +16,16 @@ const User = require("./models/user.js");
 const listings = require("./routes/listing.js");
 const user = require("./routes/user.js");
 
-const MONGO_URL = "mongodb://127.0.0.1:27017/WanderLust";
+const MONGO_URL = process.env.MONGODB_URI;
+const SESSION_SECRET = process.env.SESSION_SECRET;
 
-main()
-  .then(() => {
-    console.log("connected to DB");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
+if (!MONGO_URL) {
+  throw new Error("MONGODB_URI environment variable is required");
+}
+
+if (!SESSION_SECRET) {
+  throw new Error("SESSION_SECRET environment variable is required");
+}
 
 async function main() {
   await mongoose.connect(MONGO_URL);
@@ -36,14 +39,19 @@ app.engine("ejs", ejsMate);
 app.use(express.static(path.join(__dirname, "/public")));
 
 const sessionOptions = {
-  secret: "mysupersecretcode",
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: {
     expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
     maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === "production",
   },
 };
+
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 app.get("/", (req, res) => {
   res.send("hii i am root");
@@ -105,6 +113,15 @@ app.use((err, req, res, next) => {
   //   res.status(statusCode).send(message);
 });
 
-app.listen(8080, () => {
-  console.log("server is listening to port 8080");
-});
+main()
+  .then(() => {
+    console.log("connected to DB");
+    const port = process.env.PORT || 8080;
+    app.listen(port, () => {
+      console.log(`server is listening on port ${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to connect to MongoDB:", err.message);
+    process.exit(1);
+  });
